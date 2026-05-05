@@ -53,27 +53,43 @@ hiddenimports = [
     "keyring.backends",
     "tqdm",
     "tqdm.auto",
+    # RTL / BiDi text processing
+    "arabic_reshaper",
+    "bidi",
+    "bidi.algorithm",
 ]
 
 # ── Data files ───────────────────────────────────────────────────────
+def optional_asset(name):
+    p = os.path.join(ROOT, "assets", name)
+    if os.path.exists(p):
+        return [(p, "assets")]
+    else:
+        print(f"WARNING: assets/{name} not found, skipping")
+        return []
+
 datas = [
     # customtkinter assets (themes, icons)
     *collect_data_files("customtkinter"),
     # tkinterdnd2 Tcl/Tk package
     *collect_data_files("tkinterdnd2"),
+    # arabic-reshaper font data
+    *collect_data_files("arabic_reshaper"),
     # app assets
     (os.path.join(ROOT, "assets", "favicon.ico"), "assets"),
     (os.path.join(ROOT, "assets", "presets.json"), "assets"),
-    (os.path.join(ROOT, "assets", "user_presets.json"), "assets"),
-    (os.path.join(ROOT, "assets", "config.json"), "assets"),
+    *optional_asset("user_presets.json"),
+    *optional_asset("config.json"),
 ]
 
 # ── Binaries ─────────────────────────────────────────────────────────
-binaries = [
-    (os.path.join(ROOT, "libmpv-2.dll"), "."),
-    (os.path.join(ROOT, "ffmpeg.exe"), "."),
-    (os.path.join(ROOT, "ffprobe.exe"), "."),
-]
+binaries = []
+for bin_name in ["libmpv-2.dll", "ffmpeg.exe", "ffprobe.exe"]:
+    bin_path = os.path.join(ROOT, bin_name)
+    if os.path.exists(bin_path):
+        binaries.append((bin_path, "."))
+    else:
+        print(f"WARNING: {bin_name} not found in project root, skipping")
 
 # ── Analysis ─────────────────────────────────────────────────────────
 a = Analysis(
