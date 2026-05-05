@@ -15,7 +15,8 @@ $issPath = Join-Path $PSScriptRoot "subvela.iss"
 
 $isccCandidates = @(
     "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
-    "C:\Program Files\Inno Setup 6\ISCC.exe"
+    "C:\Program Files\Inno Setup 6\ISCC.exe",
+    "C:\Program\ISCC.exe"
 )
 
 $isccPath = $isccCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
