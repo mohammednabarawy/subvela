@@ -10,7 +10,7 @@ from tqdm.auto import tqdm
 
 NLLB_MODEL_REPO = "entai2965/nllb-200-distilled-600M-ctranslate2"
 NLLB_TOKENIZER_REPO = "facebook/nllb-200-distilled-600M"
-NLLB_CACHE_DIR = Path.home() / ".cache" / "subvela" / "translation"
+NLLB_CACHE_DIR = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "subvela" / "translation"
 
 NLLB_LANGUAGE_CODES = {
     "Afrikaans": "afr_Latn",

@@ -4,6 +4,7 @@ from tkinter import font as tkfont
 from tkinter import colorchooser
 from app.theme import COLORS, FONTS, SPACING, RADIUS, get_font_family
 from core.subtitle_model import remap_word_timestamps, SubtitleStyle
+from core.text_utils import is_rtl, apply_bidi
 
 
 class SubtitleList(ctk.CTkFrame):
@@ -145,44 +146,66 @@ class SubtitleList(ctk.CTkFrame):
 
     def _set_clipped_label_text(self, label: tk.Label, text: str):
         full_text = (text or "").strip() or "…"
+        bidi_text = apply_bidi(full_text)
         setattr(label, "_full_text", full_text)
+        setattr(label, "_bidi_text", bidi_text)
+        
+        # Set anchor and justify based on RTL
+        if is_rtl(full_text):
+            label.configure(anchor="e", justify="right")
+        else:
+            label.configure(anchor="w", justify="left")
+            
         self._apply_label_clipping(label)
 
     def _apply_label_clipping(self, label: tk.Label):
         full_text = getattr(label, "_full_text", "")
+        bidi_text = getattr(label, "_bidi_text", full_text)
+        
         if not getattr(label, "_clip_enabled", False):
-            label.configure(text=full_text)
+            label.configure(text=bidi_text)
             return
 
         try:
             width_px = int(label.winfo_width()) - 2
             if width_px <= 8:
-                label.configure(text=full_text)
+                label.configure(text=bidi_text)
                 return
 
             font_obj = tkfont.Font(font=label.cget("font"))
-            if font_obj.measure(full_text) <= width_px:
-                label.configure(text=full_text)
+            if font_obj.measure(bidi_text) <= width_px:
+                label.configure(text=bidi_text)
                 return
 
+            # RTL clipping: show beginning of text (visual right), ellipsis on left
+            # After apply_bidi(), bidi_text is in visual order where index 0 is rightmost
+            is_rtl_text = is_rtl(full_text)
             ellipsis = "…"
             ellipsis_w = font_obj.measure(ellipsis)
             if ellipsis_w >= width_px:
                 label.configure(text=ellipsis)
                 return
 
-            lo, hi = 0, len(full_text)
+            lo, hi = 0, len(bidi_text)
             while lo < hi:
                 mid = (lo + hi + 1) // 2
-                candidate = full_text[:mid] + ellipsis
+                if is_rtl_text:
+                    # Keep the rightmost characters (end of bidi string) where the anchor is.
+                    candidate = ellipsis + bidi_text[len(bidi_text) - mid:]
+                else:
+                    candidate = bidi_text[:mid] + ellipsis
+                
                 if font_obj.measure(candidate) <= width_px:
                     lo = mid
                 else:
                     hi = mid - 1
 
-            label.configure(text=full_text[:lo] + ellipsis)
+            if is_rtl_text:
+                label.configure(text=ellipsis + bidi_text[len(bidi_text) - lo:])
+            else:
+                label.configure(text=bidi_text[:lo] + ellipsis)
         except Exception:
-            label.configure(text=full_text)
+            label.configure(text=bidi_text)
 
     def _build_column_headers(self):
         ff = get_font_family()
@@ -539,6 +562,7 @@ class SubtitleList(ctk.CTkFrame):
             highlightthickness=1,
             highlightbackground=self._resolve_color(COLORS["border_subtle"]),
             highlightcolor=self._resolve_color(COLORS["accent"]),
+            justify="right" if is_rtl(current) else "left",
         )
         entry.insert(0, current)
         entry.place(x=x, y=y, width=w, height=h)
