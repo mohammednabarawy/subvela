@@ -463,13 +463,21 @@ class LocalNLLBTranslator:
                 on_status("Loading local NLLB model...")
             import ctranslate2
 
+            from core.gpu import get_device_and_compute
+            device, compute_type = get_device_and_compute()
+
+            # When on GPU, we can afford more threads for tokenization
+            inter_threads = 2 if device == "cuda" else _LOCAL_INTER_THREADS
+            intra_threads = 4 if device == "cuda" else _LOCAL_INTRA_THREADS
+
             self._translator = ctranslate2.Translator(
                 self._model_dir,
-                device="cpu",
-                compute_type="int8",
-                inter_threads=_LOCAL_INTER_THREADS,
-                intra_threads=_LOCAL_INTRA_THREADS,
+                device=device,
+                compute_type=compute_type,
+                inter_threads=inter_threads,
+                intra_threads=intra_threads,
             )
+            print(f"--- NLLB using device={device}, compute_type={compute_type} ---")
         emit_prepare_progress(0.50, 0.03, 1.0)
 
         if self._tokenizer is None:

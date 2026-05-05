@@ -253,7 +253,7 @@ def _probe_hardware_encoder(label: str, codec: str) -> tuple[bool, str]:
     cmd = [
         get_ffmpeg(), "-v", "error",
         "-f", "lavfi",
-        "-i", "color=c=black:s=128x128:d=0.1:r=1",
+        "-i", "color=c=black:s=256x256:d=0.1:r=1",
         "-frames:v", "1",
         "-an",
         "-c:v", codec,

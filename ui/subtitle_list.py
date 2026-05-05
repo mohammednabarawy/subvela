@@ -506,20 +506,27 @@ class SubtitleList(ctk.CTkFrame):
         if self._active_editor is not None:
             self._commit_inline_edit()
 
+        try:
+            if not label_widget.winfo_exists():
+                return
+            label_widget.update_idletasks()
+            row = label_widget.master
+            if not row.winfo_exists():
+                return
+            row.update_idletasks()
+
+            x = label_widget.winfo_x()
+            y = label_widget.winfo_y()
+            w = max(80, label_widget.winfo_width())
+            h = max(22, label_widget.winfo_height())
+        except tk.TclError:
+            return
+
         sub = self.state.subtitles[index]
         if field == "original":
             current = sub.original_text or ""
         else:
             current = sub.translated_text or ""
-
-        label_widget.update_idletasks()
-        row = label_widget.master
-        row.update_idletasks()
-
-        x = label_widget.winfo_x()
-        y = label_widget.winfo_y()
-        w = max(80, label_widget.winfo_width())
-        h = max(22, label_widget.winfo_height())
 
         entry = tk.Entry(
             row,

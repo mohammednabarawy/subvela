@@ -12,13 +12,33 @@ sys.path.insert(0, _project_root)
 # Add project root to PATH so Windows can find libmpv-2.dll and ffmpeg.exe
 os.environ["PATH"] = _project_root + os.pathsep + os.environ.get("PATH", "")
 
+# Force HuggingFace cache to the project directory to avoid filling up the C: drive
+# which can cause silent crashes on large model downloads (e.g. large-v2 is 3GB).
+_models_cache = os.path.join(_project_root, ".models_cache")
+os.makedirs(_models_cache, exist_ok=True)
+os.environ.setdefault("HF_HOME", _models_cache)
+os.environ.setdefault("XDG_CACHE_HOME", _models_cache)
+
 # Keep CPU math backends conservative in the packaged app so local translation
 # does not over-allocate worker memory on mid-range Windows machines.
+# These defaults are relaxed below if a CUDA GPU is detected.
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
 os.environ.setdefault("MKL_DYNAMIC", "FALSE")
+
+# Detect GPU early and relax CPU throttling if CUDA is available
+try:
+    from core.gpu import detect_gpu, print_gpu_status
+    _gpu_info = detect_gpu()
+    print_gpu_status()
+    if _gpu_info["available"]:
+        # GPU handles inference — let CPU threads breathe for data prep
+        os.environ["OMP_NUM_THREADS"] = "4"
+        os.environ["MKL_NUM_THREADS"] = "4"
+except Exception:
+    pass
 
 # Workaround: Python 3.13 platform._wmi_query() can hang indefinitely when
 # the Windows WMI service is deadlocked/slow.  customtkinter → darkdetect

@@ -31,3 +31,5 @@ ffprobe.exe
 libmpv-2.dll
 
 
+
+.models_cache/

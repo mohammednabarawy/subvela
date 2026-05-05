@@ -803,9 +803,10 @@ class SubtitleOverlayRenderer:
             text = word_entry["word"].strip()
             if not text:
                 continue
-            bbox = draw.textbbox((0, 0), text, font=font)
+            bidi_text = self._apply_bidi(text)
+            bbox = draw.textbbox((0, 0), bidi_text, font=font)
             word_metrics.append({
-                "text": text,
+                "text": bidi_text,
                 "w": bbox[2] - bbox[0],
                 "h": bbox[3] - bbox[1],
                 "start": word_entry["start"],
@@ -879,15 +880,23 @@ class SubtitleOverlayRenderer:
             bg_color = self._hex_to_rgb(style.background_color)
             opacity = int(style.background_opacity * 255)
             line_y = y_start
-            for line_words, _, line_h in lines:
-                tmp_x = (width - sum(m["w"] for m in line_words) - space_w * max(0, len(line_words) - 1)) // 2
+            for line_words, line_w, line_h in lines:
+                is_rtl = any('\u0600' <= ch <= '\u06FF' or '\u0750' <= ch <= '\u077F' or '\u08A0' <= ch <= '\u08FF' for ch in "".join(m["text"] for m in line_words))
+                tmp_x = (width - line_w) // 2
+                if is_rtl:
+                    tmp_x = (width + line_w) // 2
                 for metric in line_words:
+                    if is_rtl:
+                        tmp_x -= metric["w"]
                     overlay_draw.rounded_rectangle(
                         [tmp_x - pad, line_y - 2, tmp_x + metric["w"] + pad, line_y + metric["h"] + 2],
                         radius=4,
                         fill=(*bg_color, opacity),
                     )
-                    tmp_x += metric["w"] + space_w
+                    if not is_rtl:
+                        tmp_x += metric["w"] + space_w
+                    else:
+                        tmp_x -= space_w
                 line_y += line_h + line_gap
             img = Image.alpha_composite(img, overlay)
             draw = ImageDraw.Draw(img)
@@ -898,8 +907,13 @@ class SubtitleOverlayRenderer:
             pad = 5
             line_y = y_start
             for line_words, line_w, line_h in lines:
+                is_rtl = any('\u0600' <= ch <= '\u06FF' or '\u0750' <= ch <= '\u077F' or '\u08A0' <= ch <= '\u08FF' for ch in "".join(m["text"] for m in line_words))
                 tmp_x = (width - line_w) // 2
+                if is_rtl:
+                    tmp_x = (width + line_w) // 2
                 for metric in line_words:
+                    if is_rtl:
+                        tmp_x -= metric["w"]
                     is_active = current_time >= metric["start"] and current_time < metric["end"]
                     is_spoken = current_time >= metric["end"]
                     if is_active:
@@ -914,7 +928,10 @@ class SubtitleOverlayRenderer:
                             radius=5,
                             fill=(*highlight_color, 90),
                         )
-                    tmp_x += metric["w"] + space_w
+                    if not is_rtl:
+                        tmp_x += metric["w"] + space_w
+                    else:
+                        tmp_x -= space_w
                 line_y += line_h + line_gap
             img = Image.alpha_composite(img, highlight_overlay)
             draw = ImageDraw.Draw(img)
@@ -929,14 +946,22 @@ class SubtitleOverlayRenderer:
         if getattr(style, "glow_enabled", False):
             glow_line_y = y_start
             for line_words, line_w, line_h in lines:
-                line_text = " ".join(metric["text"] for metric in line_words)
+                if any('\u0600' <= ch <= '\u06FF' or '\u0750' <= ch <= '\u077F' or '\u08A0' <= ch <= '\u08FF' for ch in "".join(m["text"] for m in line_words)):
+                    line_text = " ".join(metric["text"] for metric in reversed(line_words))
+                else:
+                    line_text = " ".join(metric["text"] for metric in line_words)
                 line_x = (width - line_w) // 2
                 img = self._apply_glow(img, style, font, line_text, line_x, glow_line_y)
                 glow_line_y += line_h + line_gap
             draw = ImageDraw.Draw(img)
         for line_words, line_w, line_h in lines:
+            is_rtl = any('\u0600' <= ch <= '\u06FF' or '\u0750' <= ch <= '\u077F' or '\u08A0' <= ch <= '\u08FF' for ch in "".join(m["text"] for m in line_words))
             cur_x = (width - line_w) // 2
+            if is_rtl:
+                cur_x = (width + line_w) // 2
             for metric in line_words:
+                if is_rtl:
+                    cur_x -= metric["w"]
                 active = current_time >= metric["start"] and current_time < metric["end"]
                 spoken = current_time >= metric["end"]
                 if active:
@@ -956,7 +981,10 @@ class SubtitleOverlayRenderer:
                         for dx, dy in neighbors:
                             self._fb_text(draw, (cur_x + dx * thickness, line_y + dy * thickness), metric["text"], font, outline_color)
                 self._fb_text(draw, (cur_x, line_y), metric["text"], font, color)
-                cur_x += metric["w"] + space_w
+                if not is_rtl:
+                    cur_x += metric["w"] + space_w
+                else:
+                    cur_x -= space_w
             line_y += line_h + line_gap
 
         if fake_italic:
@@ -1035,16 +1063,19 @@ class SubtitleOverlayRenderer:
         current_line = ""
         for token in word_text.split():
             test_line = token if not current_line else f"{current_line} {token}"
-            bbox = draw.textbbox((0, 0), test_line, font=large_font)
+            bidi_test = self._apply_bidi(test_line)
+            bbox = draw.textbbox((0, 0), bidi_test, font=large_font)
             if (bbox[2] - bbox[0]) <= max_width or not current_line:
                 current_line = test_line
             else:
-                line_bbox = draw.textbbox((0, 0), current_line, font=large_font)
-                popup_lines.append((current_line, line_bbox[2] - line_bbox[0], line_bbox[3] - line_bbox[1]))
+                bidi_cur = self._apply_bidi(current_line)
+                line_bbox = draw.textbbox((0, 0), bidi_cur, font=large_font)
+                popup_lines.append((bidi_cur, line_bbox[2] - line_bbox[0], line_bbox[3] - line_bbox[1]))
                 current_line = token
         if current_line:
-            line_bbox = draw.textbbox((0, 0), current_line, font=large_font)
-            popup_lines.append((current_line, line_bbox[2] - line_bbox[0], line_bbox[3] - line_bbox[1]))
+            bidi_cur = self._apply_bidi(current_line)
+            line_bbox = draw.textbbox((0, 0), bidi_cur, font=large_font)
+            popup_lines.append((bidi_cur, line_bbox[2] - line_bbox[0], line_bbox[3] - line_bbox[1]))
         if not popup_lines:
             return img if orig_mode == "RGBA" else img.convert(orig_mode)
 
@@ -1113,6 +1144,7 @@ class SubtitleOverlayRenderer:
             prev_word = words[prev_idx]["word"].strip()
             if not prev_word:
                 continue
+            prev_word = self._apply_bidi(prev_word)
             alpha_val = max(80, 200 - offset * 60)
             dimmed = (alpha_val, alpha_val, alpha_val)
             prev_bbox = draw.textbbox((0, 0), prev_word, font=small_font)
@@ -1262,15 +1294,25 @@ class SubtitleOverlayRenderer:
             if not is_last:
                 draw_seg(line_text, line_x, current_y, history_dim)
             else:
-                if new_word and line_text.endswith(new_word):
-                    prefix = line_text[:len(line_text) - len(new_word)].rstrip()
+                is_rtl = any('\u0600' <= ch <= '\u06FF' or '\u0750' <= ch <= '\u077F' or '\u08A0' <= ch <= '\u08FF' for ch in line_text)
+                shaped_new_word = self._apply_bidi(new_word)
+                if not is_rtl and new_word and line_text.endswith(shaped_new_word):
+                    prefix = line_text[:len(line_text) - len(shaped_new_word)].rstrip()
                     if prefix:
                         draw_seg(prefix, line_x, current_y, history_dim)
                         prefix_adv = measure_draw.textbbox((0, 0), prefix + " ", font=font)[2] - measure_draw.textbbox((0, 0), prefix + " ", font=font)[0]
                         new_x = line_x + prefix_adv
                     else:
                         new_x = line_x
-                    draw_seg(new_word, new_x, current_y, entry_alpha)
+                    draw_seg(shaped_new_word, new_x, current_y, entry_alpha)
+                elif is_rtl and new_word and line_text.startswith(shaped_new_word):
+                    suffix = line_text[len(shaped_new_word):].lstrip()
+                    if suffix:
+                        suffix_adv = measure_draw.textbbox((0, 0), shaped_new_word + " ", font=font)[2] - measure_draw.textbbox((0, 0), shaped_new_word + " ", font=font)[0]
+                        draw_seg(suffix, line_x + suffix_adv, current_y, history_dim)
+                        draw_seg(shaped_new_word, line_x, current_y, entry_alpha)
+                    else:
+                        draw_seg(shaped_new_word, line_x, current_y, entry_alpha)
                 else:
                     draw_seg(line_text, line_x, current_y, history_dim)
             current_y += line_h + 2
@@ -1335,6 +1377,19 @@ class SubtitleOverlayRenderer:
                 tokens.append((word, needs_space))
         return tokens
 
+    def _apply_bidi(self, text: str) -> str:
+        if not text:
+            return text
+        if not any('\u0600' <= ch <= '\u06FF' or '\u0750' <= ch <= '\u077F' or '\u08A0' <= ch <= '\u08FF' for ch in text):
+            return text
+        try:
+            import arabic_reshaper
+            from bidi.algorithm import get_display
+            reshaped_text = arabic_reshaper.reshape(text)
+            return get_display(reshaped_text)
+        except ImportError:
+            return text
+
     def _prepare_text_block(self, draw: ImageDraw.Draw, text: str, style: SubtitleStyle,
                             img_w: int, img_h: int, scale: float = 1.0):
         font = self._get_font(style, img_h, scale=scale, sample_text=text)
@@ -1349,17 +1404,23 @@ class SubtitleOverlayRenderer:
         for token_text, needs_space in tokens:
             sep = " " if needs_space and current_line else ""
             test_line = current_line + sep + token_text
-            bbox = draw.textbbox((0, 0), test_line, font=font)
+            
+            # Measure with bidi applied for accurate ligature width
+            bidi_test = self._apply_bidi(test_line)
+            bbox = draw.textbbox((0, 0), bidi_test, font=font)
+            
             if (bbox[2] - bbox[0]) <= max_width:
                 current_line = test_line
             else:
                 if current_line:
-                    line_bbox = draw.textbbox((0, 0), current_line, font=font)
-                    lines.append((current_line, line_bbox[2] - line_bbox[0], line_bbox[3] - line_bbox[1]))
+                    bidi_cur = self._apply_bidi(current_line)
+                    line_bbox = draw.textbbox((0, 0), bidi_cur, font=font)
+                    lines.append((bidi_cur, line_bbox[2] - line_bbox[0], line_bbox[3] - line_bbox[1]))
                 current_line = token_text
         if current_line:
-            line_bbox = draw.textbbox((0, 0), current_line, font=font)
-            lines.append((current_line, line_bbox[2] - line_bbox[0], line_bbox[3] - line_bbox[1]))
+            bidi_cur = self._apply_bidi(current_line)
+            line_bbox = draw.textbbox((0, 0), bidi_cur, font=font)
+            lines.append((bidi_cur, line_bbox[2] - line_bbox[0], line_bbox[3] - line_bbox[1]))
 
         block_h = sum(line[2] for line in lines) + (len(lines) - 1) * 2
         block_w = max(line[1] for line in lines) if lines else 0

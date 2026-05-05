@@ -14,7 +14,7 @@ _WARMUP_THREAD = None
 _WHISPER_MODEL_CLASS = None
 _RUNTIME_STATE = "idle"
 _RUNTIME_ERROR = ""
-_WHISPER_CACHE_DIR = Path.home() / ".cache" / "whisper"
+_WHISPER_CACHE_DIR = Path(os.environ.get("HF_HOME", Path.home() / ".cache" / "huggingface" / "hub")) / "faster-whisper"
 _MATERIALIZED_DIRNAME = "materialized"
 _MODEL_ALLOW_PATTERNS = [
     "config.json",
@@ -563,7 +563,10 @@ class Transcriber:
         for attempt in range(2):
             try:
                 model_path = download_model_files(model_size, cache_dir=cache_dir)
-                self.model = whisper_model_class(model_path, device="cpu", compute_type="int8")
+                from core.gpu import get_device_and_compute
+                device, compute_type = get_device_and_compute()
+                self.model = whisper_model_class(model_path, device=device, compute_type=compute_type)
+                print(f"--- Whisper using device={device}, compute_type={compute_type} ---")
                 self.loaded_model_size = model_size
                 print(f"--- Model Loaded Successfully ---")
                 return
