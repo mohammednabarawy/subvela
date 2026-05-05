@@ -73,7 +73,7 @@ class TranscribePanel(ctk.CTkFrame):
         self.source_lang_var = ctk.StringVar(value="Auto Detect")
         self.source_lang_dropdown = ctk.CTkComboBox(
             source_frame,
-            values=["Auto Detect", "English", "Malay", "Chinese", "Japanese", "French", "German", "Spanish"],
+            values=["Auto Detect", "English", "Arabic", "Malay", "Chinese", "Japanese", "French", "German", "Spanish"],
             variable=self.source_lang_var,
             font=ctk.CTkFont(family=ff, size=FONTS["body"][1]),
             dropdown_font=ctk.CTkFont(family=ff, size=FONTS["small"][1]),
@@ -297,6 +297,7 @@ class TranscribePanel(ctk.CTkFrame):
         lang_map = {
             "Auto Detect": None,
             "English": "en",
+            "Arabic": "ar",
             "Malay": "ms",
             "Chinese": "zh",
             "Japanese": "ja",
@@ -481,9 +482,11 @@ class TranscribePanel(ctk.CTkFrame):
 
         self.trans_status.configure(text=f"Done! {len(entries)} segments found.", text_color=COLORS["success"])
 
-        # Smart translation default: Chinese source → English target, otherwise → Chinese
+        # Smart translation default
         source = self.source_lang_var.get()
         if source in ("Chinese", "Chinese (Simplified)", "Chinese (Traditional)"):
+            self.lang_var.set("English")
+        elif source == "Arabic":
             self.lang_var.set("English")
         else:
             self.lang_var.set("Chinese (Simplified)")
